@@ -1,0 +1,108 @@
+---
+title: "POST /api/sorteos/:adminToken/lanzar — Run the Draw"
+sidebarTitle: "Launch Draw"
+description: "POST /api/sorteos/:adminToken/lanzar — Runs the Secret Santa algorithm, saves pairings to MongoDB, and sends personalized reveal emails to all participants."
+---
+
+This is the most consequential endpoint in the API. Calling it triggers the randomised Secret Santa algorithm, persists the resulting pairings to MongoDB, and immediately dispatches personalised HTML reveal emails to every participant. Because emails are sent the moment this endpoint is called, the operation cannot be undone.
+
+## Request
+
+**Method:** `POST`  
+**URL:** `/api/sorteos/:adminToken/lanzar`  
+**Headers:** `Content-Type: application/json`  
+**Body:** Empty JSON object — `{}`
+
+### Path Parameters
+
+<ParamField path="adminToken" type="string" required>
+  The UUID returned when the group was created. Must match an existing group document in MongoDB whose `estado` is `"borrador"`.
+</ParamField>
+
+## Example Request
+
+<CodeGroup>
+
+```bash cURL
+curl -X POST https://amigo-invisible-node-87yz.vercel.app/api/sorteos/550e8400-e29b-41d4-a716-446655440000/lanzar \
+  -H "Content-Type: application/json" \
+  -d '{}'
+```
+
+```javascript JavaScript (fetch)
+const adminToken = "550e8400-e29b-41d4-a716-446655440000";
+
+const response = await fetch(
+  `https://amigo-invisible-node-87yz.vercel.app/api/sorteos/${adminToken}/lanzar`,
+  {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({}),
+  }
+);
+
+const result = await response.json();
+console.log(result.mensaje);
+// "¡Sorteo realizado y correos enviados con éxito!"
+```
+
+</CodeGroup>
+
+## What Happens
+
+<Steps>
+  <Step title="Load the group from MongoDB">
+    The controller performs a `Sorteo.findOne({ adminToken })` lookup. If no matching document exists, a `404` is returned immediately and no further processing occurs.
+  </Step>
+  <Step title="Validate participant count">
+    The number of entries in `participantes` is checked. At least **3 participants** are required to run a valid draw. If fewer than 3 are registered, a `404` is returned with the message `"Se necesitan al menos 3 participantes."`.
+  </Step>
+  <Step title="Run the draw algorithm">
+    `generarEmparejamientos(participantes)` is called. The algorithm shuffles the participant list and checks each candidate pairing against two rules:
+    - A participant cannot be assigned to gift themselves (matched by `email`).
+    - A participant cannot be assigned to someone listed in their `exclusiones` array (matched by `nombre`).
+
+    If a valid arrangement is not found on the first shuffle, the process retries up to **1,000 times**. After 1,000 failed attempts, the algorithm throws an error indicating an unsolvable exclusion conflict.
+  </Step>
+  <Step title="Persist results to MongoDB">
+    The generated pairings are written to `sorteo.emparejamientosActuales` and the group's `estado` is set to `"completado"`. The document is saved with `sorteo.save()`.
+  </Step>
+  <Step title="Send reveal emails">
+    `enviarCorreosSorteo()` is called with the pairings, participant list, and group name. Each participant receives a personalised HTML email revealing the name of the person they will be gifting.
+  </Step>
+  <Step title="Return success">
+    A `200 OK` response is returned with a confirmation message once all emails have been sent.
+  </Step>
+</Steps>
+
+## Response
+
+**Status:** `200 OK`
+
+<ResponseField name="mensaje" type="string">
+  Human-readable confirmation. Value is always `"¡Sorteo realizado y correos enviados con éxito!"`.
+</ResponseField>
+
+### Example Response
+
+```json
+{
+  "mensaje": "¡Sorteo realizado y correos enviados con éxito!"
+}
+```
+
+## Error Responses
+
+| Status | Scenario | Body |
+|--------|----------|------|
+| `404` | No group found for the supplied `adminToken` | `{ "error": "Sorteo no encontrado." }` |
+| `404` | Fewer than 3 participants registered in the group | `{ "error": "Se necesitan al menos 3 participantes." }` |
+| `400` | Algorithm exhausted 1,000 retries without finding a valid pairing (unsolvable exclusion conflict) | `{ "error": "No se pudo encontrar una combinación válida. Revisa las exclusiones." }` |
+
+<Warning>
+  This endpoint is **irreversible**. Once called, reveal emails are sent to every participant immediately and the group's `estado` is permanently set to `"completado"`. There is no undo endpoint and no way to resend different results. Verify the participant list and exclusion rules carefully before launching the draw.
+</Warning>
+
+<Tip>
+  For larger groups, this request may take several seconds to complete — emails are sent sequentially, one per participant. Avoid setting an aggressive timeout on the client side and consider showing a loading indicator in the UI while waiting for the response.
+</Tip>

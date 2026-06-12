@@ -1,0 +1,105 @@
+---
+title: "Amigo Invisible Architecture: Frontend, Backend, and Data Flow"
+sidebarTitle: "Architecture"
+description: "How Amigo Invisible's Angular SPA, Node.js REST API, MongoDB database, and Gmail SMTP fit together to run a Secret Santa draw end to end."
+---
+
+Amigo Invisible is a two-tier application: an Angular single-page application handles all user interaction in the browser, and a Node.js/Express backend exposes three REST endpoints that manage persistence and email delivery. The two tiers are fully decoupled — they share no code and are deployed independently to Vercel. Communication happens exclusively over HTTP/JSON.
+
+## High-Level Data Flow
+
+The following sequence describes a complete Secret Santa draw, from the organizer opening the app to participants receiving their emails:
+
+1. **The organizer fills out the group form** in the Angular `Grupo` component — group name, optional budget, optional delivery date, and the participant list with any exclusions.
+2. **Angular's `GrupoService` sends a `POST /api/sorteos` request** to the Node.js backend, with the full group payload as a JSON body.
+3. **The backend creates the sorteo document** in MongoDB — generating a UUID `adminToken` via `crypto.randomUUID()` — and responds with `201 Created`, returning the `adminToken` to the Angular client.
+4. **The Angular app navigates to `/sorteo/:adminToken`**, where the `Sorteo` component calls `GET /api/sorteos/:adminToken` to fetch and display the group details and current draw state (`borrador`).
+5. **The organizer clicks "Launch Draw"**, triggering `GrupoService.lanzarSorteo()`, which sends a `POST /api/sorteos/:adminToken/lanzar` to the backend.
+6. **The backend runs `generarEmparejamientos()`** — a shuffle-and-validate loop that tries up to 1,000 random assignments until one satisfies all rules (no self-assignment, no excluded pairs). It then updates the sorteo's `estado` to `completado` and persists the result to MongoDB, before calling `enviarCorreosSorteo()`.
+7. **Nodemailer sends one HTML email per participant** through Gmail SMTP, each revealing only that participant's assigned recipient. The organizer never sees the full pairing list.
+
+## Frontend
+
+The Angular application lives in the `Angular/` directory and is structured around two routes, two components, and one service.
+
+**Routes** are defined in `app.routes.ts`:
+
+```typescript
+{ path: '',                  component: Grupo  }   // Group creation form
+{ path: 'sorteo/:adminToken', component: Sorteo }   // Admin / launch page
+{ path: '**',                redirectTo: ''    }   // Fallback
+```
+
+**`Grupo` component** renders the group-creation form. On submission it calls `GrupoService.crearSorteo()` and, upon success, redirects the browser to the returned `adminToken` route.
+
+**`Sorteo` component** reads the `adminToken` from the URL, fetches the group data via `GrupoService.getGrupo()`, and displays participant details and draw status. A single button triggers `GrupoService.lanzarSorteo()`.
+
+**`GrupoService`** is the sole HTTP abstraction. It exposes three methods that map directly to the three backend endpoints:
+
+| Method | HTTP call |
+|---|---|
+| `crearSorteo(datosGrupo)` | `POST /api/sorteos` |
+| `getGrupo(adminToken)` | `GET /api/sorteos/:adminToken` |
+| `lanzarSorteo(adminToken)` | `POST /api/sorteos/:adminToken/lanzar` |
+
+The `apiUrl` property in `GrupoService` is set to the production backend URL (`https://amigo-invisible-node-87yz.vercel.app/api/sorteos`), making it trivial to point any deployment of the frontend at any deployment of the backend by editing a single string. Styling is provided by **Tailwind CSS 3**, configured alongside the Angular build pipeline.
+
+<Note>
+  The Angular app is deployed as a static SPA to Vercel. Because the production backend URL is hardcoded in `GrupoService`, the frontend can be redeployed or hosted anywhere without any build-time environment variables. To target a different backend, change the `apiUrl` value in `Angular/src/app/servicios/grupo.ts` before building.
+</Note>
+
+## Backend
+
+The Node.js server lives in the `Node/` directory. Its entry point, `index.js`, loads environment variables with `dotenv`, configures Express middleware (`cors`, `express.json()`), connects to MongoDB via Mongoose, and mounts the single router:
+
+```javascript
+app.use('/api/sorteos', sorteoRutas);
+```
+
+**Three endpoints** are registered in `rutas/sorteoRutas.js`:
+
+| Method | Path | Controller function | Purpose |
+|---|---|---|---|
+| `POST` | `/api/sorteos` | `crearSorteo` | Create a new group and return its `adminToken` |
+| `GET` | `/api/sorteos/:adminToken` | `obtenerSorteo` | Fetch group data by token |
+| `POST` | `/api/sorteos/:adminToken/lanzar` | `lanzarSorteo` | Run the draw algorithm and send emails |
+
+**`sorteoControlador.js`** contains the three controller functions. `crearSorteo` validates the payload, generates the token, and saves the document. `obtenerSorteo` performs a `findOne` by `adminToken` and returns the document. `lanzarSorteo` enforces the minimum-three-participants rule, delegates to `algoritmoSorteo`, persists the result, and calls `mailer`.
+
+**`utils/algoritmoSorteo.js`** implements `generarEmparejamientos()` — a brute-force shuffle loop (up to 1,000 attempts) that produces a valid list of `{ de, para }` email pairs. Two rules are checked for each candidate assignment: a participant cannot be assigned to themselves, and a participant cannot be assigned to someone on their `exclusiones` list. An error is thrown if no valid combination is found within the attempt limit.
+
+**`utils/mailer.js`** exports `enviarCorreosSorteo()`, which iterates over the generated pairs and sends an individual HTML email to each giver using a Nodemailer transporter configured for Gmail SMTP on port 465.
+
+In production the server is exported as a module (`module.exports = app`) and wrapped by Vercel's serverless runtime. The `app.listen()` call is guarded by `process.env.NODE_ENV !== 'production'` so it is skipped in the serverless context.
+
+## Database
+
+MongoDB stores a single collection: `sorteos`. Every document is an instance of the `Sorteo` Mongoose schema, which captures the complete state of one group:
+
+```
+Sorteo {
+  nombreGrupo       String          // Group display name
+  presupuesto       String          // Optional gift budget
+  fechaEntrega      Date            // Optional delivery date
+  adminToken        String (unique) // UUID that gates all management operations
+  estado            "borrador" | "completado"
+  participantes     [{ nombre, email, exclusiones[] }]
+  emparejamientosPasados [{        // Historical draw results
+    fechaSorteo  Date
+    parejas      [{ de, para }]    // email → email pairs
+  }]
+  createdAt / updatedAt            // Mongoose timestamps
+}
+```
+
+The `adminToken` field has a `unique` index, ensuring two groups can never collide on the same token. The `emparejamientosPasados` array preserves historical pairing records so that future versions of the app can prevent repeating the same pairs across multiple yearly draws.
+
+## Email
+
+Nodemailer is configured with a persistent Gmail SMTP transporter (host `smtp.gmail.com`, port 465, SSL). When a draw is launched, `enviarCorreosSorteo()` loops over every generated pair, looks up the sender's and recipient's display names from the `participantes` array, and sends a styled HTML email to the **giver** — revealing only the name of the person they must buy a gift for.
+
+The organizer is never shown who was assigned to whom. The only confirmation they receive is a success response from the API confirming that all emails were sent. This design keeps the draw genuinely secret even from the person who organized it.
+
+<Note>
+  Both the Angular frontend and the Node.js backend are deployed as independent projects on Vercel. The frontend build output is served as a static SPA; the backend is wrapped by Vercel's serverless function adapter (see `Node/vercel.json`). The Angular app calls the production backend URL that is hardcoded in `GrupoService` — updating that URL and redeploying the frontend is all that is needed to point the app at a different backend environment.
+</Note>

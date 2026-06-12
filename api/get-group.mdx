@@ -1,0 +1,131 @@
+---
+title: "GET /api/sorteos/:adminToken — Retrieve Group Data"
+sidebarTitle: "Get Group"
+description: "GET /api/sorteos/:adminToken — Fetches the full Sorteo document from MongoDB including participants, status, and past pairings by admin token."
+---
+
+This endpoint retrieves the complete sorteo document for a group identified by its `adminToken`. The full Mongoose document is returned as-is, including all participant data, the current draw status, and any historical pairing records.
+
+## Request
+
+**Method:** `GET`  
+**URL:** `/api/sorteos/:adminToken`  
+**Body:** None required.
+
+### Path Parameters
+
+<ParamField path="adminToken" type="string" required>
+  The UUID returned when the group was created via `POST /api/sorteos`. This value uniquely identifies the group in MongoDB and authorises access to its data.
+</ParamField>
+
+## Example Request
+
+<CodeGroup>
+
+```bash cURL
+curl https://amigo-invisible-node-87yz.vercel.app/api/sorteos/550e8400-e29b-41d4-a716-446655440000
+```
+
+```javascript JavaScript (fetch)
+const adminToken = "550e8400-e29b-41d4-a716-446655440000";
+
+const response = await fetch(
+  `https://amigo-invisible-node-87yz.vercel.app/api/sorteos/${adminToken}`
+);
+
+const sorteo = await response.json();
+console.log(sorteo.estado); // "borrador" or "completado"
+```
+
+</CodeGroup>
+
+## Response
+
+**Status:** `200 OK`
+
+The full Mongoose document is returned. Field descriptions follow the MongoDB schema defined in `Sorteo.js`.
+
+<ResponseField name="_id" type="string">
+  MongoDB-generated document identifier (ObjectId serialised as a hex string).
+</ResponseField>
+
+<ResponseField name="nombreGrupo" type="string">
+  Display name of the group, as provided at creation time.
+</ResponseField>
+
+<ResponseField name="presupuesto" type="string">
+  Free-text budget description (e.g. `"20€ - 30€"`). May be absent if not provided at creation.
+</ResponseField>
+
+<ResponseField name="fechaEntrega" type="string">
+  Planned gift exchange date in ISO 8601 format. May be absent if not provided at creation.
+</ResponseField>
+
+<ResponseField name="adminToken" type="string">
+  The group's admin token — mirrors the value used in the request path.
+</ResponseField>
+
+<ResponseField name="estado" type="string">
+  Current lifecycle status of the group. One of:
+  - `"borrador"` — the group has been created but the draw has not yet been launched.
+  - `"completado"` — the draw has been run and reveal emails have been sent.
+</ResponseField>
+
+<ResponseField name="participantes" type="array">
+  Array of participant objects registered in the group.
+
+  <ResponseField name="nombre" type="string">
+    Participant's display name.
+  </ResponseField>
+
+  <ResponseField name="email" type="string">
+    Participant's email address.
+  </ResponseField>
+
+  <ResponseField name="exclusiones" type="array of strings">
+    Names of participants this person must never be assigned to gift.
+  </ResponseField>
+</ResponseField>
+
+<ResponseField name="emparejamientosPasados" type="array">
+  Historical record of past draws for this group. Each entry contains:
+  - `fechaSorteo` — timestamp of when the draw took place.
+  - `parejas` — array of `{ de, para }` pairing objects (both values are email addresses).
+
+  This array is empty (`[]`) until a draw has been launched and completed.
+</ResponseField>
+
+<ResponseField name="createdAt" type="string">
+  ISO 8601 timestamp of when the document was first saved. Added automatically by Mongoose's `timestamps` option.
+</ResponseField>
+
+<ResponseField name="updatedAt" type="string">
+  ISO 8601 timestamp of the most recent document update. Added automatically by Mongoose's `timestamps` option.
+</ResponseField>
+
+### Example Response
+
+```json
+{
+  "_id": "64b2f...",
+  "nombreGrupo": "Navidad Familia Pérez",
+  "presupuesto": "20€ - 30€",
+  "adminToken": "550e8400-e29b-41d4-a716-446655440000",
+  "estado": "borrador",
+  "participantes": [
+    { "nombre": "Ana",   "email": "ana@example.com",   "exclusiones": [] },
+    { "nombre": "Luis",  "email": "luis@example.com",  "exclusiones": ["Ana"] },
+    { "nombre": "Marta", "email": "marta@example.com", "exclusiones": [] }
+  ],
+  "emparejamientosPasados": [],
+  "createdAt": "2024-12-01T10:00:00.000Z",
+  "updatedAt": "2024-12-01T10:00:00.000Z"
+}
+```
+
+## Error Responses
+
+| Status | Scenario | Body |
+|--------|----------|------|
+| `404` | No group found for the supplied `adminToken`, or the token is malformed | `{ "error": "Sorteo no encontrado o el enlace es inválido." }` |
+| `500` | Unexpected database or server error | `{ "error": "Error interno del servidor" }` |

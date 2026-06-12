@@ -1,0 +1,124 @@
+---
+title: "Node.js Backend: Structure and Setup for Amigo Invisible"
+sidebarTitle: "Overview"
+description: "How the Express.js backend is structured — routes, controllers, Mongoose model, utility modules, and how to run it locally or deploy to Vercel."
+---
+
+The Amigo Invisible backend is a Node.js application built with **Express 5**, using **Mongoose** as the MongoDB ODM, **Nodemailer** for automated email delivery, and **dotenv** for environment configuration. In production it is deployed as a serverless function on **Vercel** via the `@vercel/node` builder, while locally it runs as a conventional HTTP server with `nodemon` for live-reloading.
+
+## Directory Structure
+
+```
+Node/
+├── index.js              # Express app entry point
+├── package.json
+├── vercel.json           # Serverless deployment config
+├── rutas/
+│   └── sorteoRutas.js    # Route definitions
+├── controladores/
+│   └── sorteoControlador.js  # Request handlers
+├── modelos/
+│   └── Sorteo.js         # Mongoose schema
+└── utils/
+    ├── algoritmoSorteo.js # Draw algorithm
+    └── mailer.js          # Nodemailer helper
+```
+
+## Entry Point
+
+`index.js` is the application entry point. It performs the following tasks in order:
+
+1. Loads environment variables from `.env` via `dotenv`.
+2. Creates the Express app instance.
+3. Applies the `cors()` and `express.json()` middleware so the Angular frontend can communicate with it across origins and send JSON payloads.
+4. Opens a connection to MongoDB using `mongoose.connect()` with the `MONGO_URI` environment variable.
+5. Imports and mounts the draw routes under the `/api/sorteos` prefix.
+6. Conditionally starts the HTTP listener only when `NODE_ENV !== 'production'`, then exports `app` so Vercel can consume it as a serverless handler.
+
+```javascript
+// Carga las variables de entorno
+require('dotenv').config();
+
+const express = require('express');
+const mongoose = require('mongoose');
+const cors = require('cors');
+
+const app = express();
+const PORT = process.env.PORT || 3000
+
+// ---- MIDDLEWARES ----
+app.use(cors()); // Permite peticiones desde Angular
+app.use(express.json()); // Permite que el servidor entienda JSON
+
+// ---- CONEXIÓN A MONGO ----
+mongoose.connect(process.env.MONGO_URI)
+    .then(() => console.log('✅ Conectado a MongoDB'))
+    .catch((error) => console.error('❌ Error al conectar a MongoDB:', error)
+    )
+
+// ---- IMPORTAR RUTAS ----
+const sorteoRutas = require('./rutas/sorteoRutas');
+
+// ---- USAR RUTAS ----
+app.use('/api/sorteos', sorteoRutas);
+
+
+
+// ---- ARRANCAR EL SERVIDOR ----
+if (process.env.NODE_ENV !== 'production') {
+  const PORT = process.env.PORT || 3000;
+  app.listen(PORT, () => {
+    console.log(`Servidor corriendo en el puerto ${PORT}`);
+  });
+}
+
+module.exports = app;
+```
+
+<Note>
+  The HTTP listener is wrapped in `if (process.env.NODE_ENV !== 'production')`. This means the server starts normally during local development, but when deployed to Vercel, the app module is simply exported and Vercel manages the request lifecycle — no listener is started, avoiding port conflicts in the serverless environment.
+</Note>
+
+## Key Dependencies
+
+<CardGroup cols={2}>
+  <Card title="express ^5.2.1" icon="server">
+    HTTP server and routing framework. Version 5 brings native async/await error propagation, so unhandled promise rejections inside route handlers are automatically forwarded to Express error middleware.
+  </Card>
+  <Card title="mongoose ^9.7.0" icon="database">
+    MongoDB ODM used to define the `Sorteo` schema, validate documents, and interact with the database through a clean model API.
+  </Card>
+  <Card title="nodemailer ^8.0.10" icon="envelope">
+    Handles all outbound email delivery. Configured with a Gmail SMTP transporter to send personalized Secret Santa reveal emails to each participant.
+  </Card>
+  <Card title="uuid ^14.0.0" icon="fingerprint">
+    Listed as a dependency, though the controller uses Node's built-in `crypto.randomUUID()` directly to generate the unique `adminToken` for each group.
+  </Card>
+  <Card title="dotenv ^17.4.2" icon="lock">
+    Loads environment variables from a `.env` file at startup. Required variables include `MONGO_URI`, `EMAIL_USER`, and `EMAIL_PASS`.
+  </Card>
+  <Card title="cors ^2.8.6" icon="globe">
+    Enables cross-origin resource sharing so the Angular frontend (served on a different origin during development) can make API requests without being blocked by the browser.
+  </Card>
+</CardGroup>
+
+## Local Development
+
+Install dependencies and start the development server with `nodemon` for automatic restarts on file changes:
+
+```bash
+# Install all dependencies
+npm install
+
+# Start the development server with live-reload
+npm run dev
+```
+
+The server will be available at `http://localhost:3000` by default. Make sure you have a `.env` file in the `Node/` directory with the following variables set before starting:
+
+```bash
+MONGO_URI=mongodb+srv://<user>:<password>@<cluster>.mongodb.net/<dbname>
+EMAIL_USER=your-gmail-address@gmail.com
+EMAIL_PASS=your-gmail-app-password
+PORT=3000
+```

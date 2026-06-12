@@ -1,0 +1,104 @@
+---
+title: "Environment Variables for Amigo Invisible"
+sidebarTitle: "Environment"
+description: "All environment variables required by the Amigo Invisible Node.js backend — MongoDB connection, Gmail SMTP credentials, and server port configuration."
+---
+
+The Node.js backend reads all runtime configuration from environment variables using the `dotenv` package, which is loaded at the very top of `index.js` via `require('dotenv').config()`. The Angular frontend does not use any environment variables — every configuration value it needs (such as the backend API URL) is set directly in the source code at build time.
+
+## Variable Reference
+
+<ParamField body="MONGO_URI" type="string" required>
+  MongoDB connection string used by Mongoose to connect to your database. This must point to a MongoDB Atlas cluster or a local MongoDB instance.
+
+  **Example:**
+  ```
+  mongodb+srv://user:pass@cluster.mongodb.net/amigoInvisible
+  ```
+</ParamField>
+
+<ParamField body="EMAIL_USER" type="string" required>
+  The Gmail address used as the SMTP sender when dispatching Secret Santa assignment emails via Nodemailer.
+
+  **Example:**
+  ```
+  your.email@gmail.com
+  ```
+</ParamField>
+
+<ParamField body="EMAIL_PASS" type="string" required>
+  A Gmail **App Password** — this is **not** your regular Google account password. It must be generated separately from your Google Account security settings. See the [Gmail App Password](#gmail-app-password) section below for instructions.
+
+  **Example:**
+  ```
+  your_gmail_app_password
+  ```
+</ParamField>
+
+<ParamField body="PORT" type="number" default="3000">
+  The HTTP port the Express server listens on when running locally. In Vercel's serverless environment this variable is ignored — Vercel handles all routing and port binding automatically.
+
+  **Example:**
+  ```
+  3000
+  ```
+</ParamField>
+
+<ParamField body="NODE_ENV" type="string">
+  Controls whether the Express HTTP server listener is started. When set to `production`, the `app.listen()` call in `index.js` is skipped entirely, because Vercel exports the `app` object directly as a serverless function handler. Leave this unset for local development so the server starts normally.
+
+  **Example:**
+  ```
+  production
+  ```
+</ParamField>
+
+## Local .env File
+
+For local development, create a `.env` file inside the `Node/` directory. The `dotenv` package reads this file automatically when the server starts.
+
+```bash Node/.env
+MONGO_URI=mongodb+srv://<user>:<password>@cluster.mongodb.net/amigoInvisible
+EMAIL_USER=your.email@gmail.com
+EMAIL_PASS=your_gmail_app_password
+PORT=3000
+```
+
+<Warning>
+  **Never commit `Node/.env` to version control.** It contains sensitive credentials that must remain private. The file should already be listed in `.gitignore` — double-check this before pushing to any public repository.
+</Warning>
+
+## MongoDB Setup
+
+You have two options for running MongoDB:
+
+**MongoDB Atlas (recommended)** — Atlas is a fully managed cloud database with a free tier that is more than sufficient for personal Secret Santa groups. Sign up at [mongodb.com/atlas](https://www.mongodb.com/atlas), create a free cluster, and generate a connection string from the **Connect** dialog. The connection string follows this format:
+
+```
+mongodb+srv://<username>:<password>@<cluster-name>.mongodb.net/amigoInvisible
+```
+
+**Local MongoDB instance** — If you prefer to run MongoDB locally (e.g. via the Community Server or Docker), set `MONGO_URI` to:
+
+```
+mongodb://localhost:27017/amigoInvisible
+```
+
+Make sure your local MongoDB service is running before starting the Node.js server.
+
+<Tip>
+  When using MongoDB Atlas, the connection string **must include the database name** at the end of the URI — `/amigoInvisible` in the examples above. Without it, Mongoose will store documents in a default database and your queries may return unexpected results. Including the name ensures all collections land in the correct `amigoInvisible` database automatically.
+</Tip>
+
+## Gmail App Password
+
+Gmail's SMTP server rejects standard account passwords when used by third-party apps. You must generate a dedicated **App Password** instead. To do this:
+
+1. Go to your **Google Account** at [myaccount.google.com](https://myaccount.google.com).
+2. Navigate to **Security**.
+3. Under **How you sign in to Google**, open **2-Step Verification** (it must be enabled before App Passwords are available).
+4. Scroll to the bottom and select **App Passwords**.
+5. Choose a name for the app (e.g. `Amigo Invisible`) and click **Create**.
+6. Copy the 16-character password that appears and paste it as the value of `EMAIL_PASS` in your `.env` file.
+
+This password grants Nodemailer permission to send emails on behalf of your Gmail account without exposing your main account password.

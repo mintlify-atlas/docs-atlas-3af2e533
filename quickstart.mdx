@@ -1,47 +1,110 @@
 ---
-title: "Quickstart"
-description: "Begin with a guide on the fastest path to a successful outcome"
+title: "Get Started with Amigo Invisible in Minutes"
+sidebarTitle: "Quickstart"
+description: "Clone the repository, configure environment variables, and run both the Angular frontend and Node.js backend locally to host your first Secret Santa draw."
 ---
 
-Describe how someone begins using your product. What is the first thing they need to do? Are there any prerequisites?
-
-A quickstart should take someone from zero to using your product. They'll get a quick win and a sense of what they can accomplish.
+This guide walks you through running the complete Amigo Invisible stack on your local machine. By the end you will have the Node.js/Express API connected to MongoDB, the Angular SPA served on `localhost:4200`, and everything wired together so you can create a group and trigger a real Secret Santa draw with emails going out.
 
 ## Prerequisites
 
-Before you begin, you must have:
+Make sure the following are available on your machine before you start:
 
-- Requirement one (for example, Node.js 18+, a free account, an API key)
-- Requirement two (for example, a compatible device, a compatible browser, a compatible operating system)
+- **Node.js 18+** and **npm** — verify with `node -v` and `npm -v`.
+- **Angular CLI** — install globally if you do not already have it:
+  ```bash
+  npm install -g @angular/cli
+  ```
+- **MongoDB connection string** — either a free [MongoDB Atlas](https://www.mongodb.com/atlas) cluster or a locally running MongoDB instance.
+- **Gmail account with an App Password** — standard Gmail passwords will not work; see the tip at the bottom of this page.
 
-## Get started
+## Clone the Repository
+
+```bash
+git clone https://github.com/Sufianeh7/AmigoInvisible.git
+cd AmigoInvisible
+```
+
+## Setup Steps
 
 <Steps>
-  <Step title="Install">
-    Describe how to install your product or sign up.
+  <Step title="Configure the Backend">
+    Create a `.env` file inside the `Node/` directory. The server reads these four variables at startup via `dotenv`:
 
-    ```bash
-    npm install your-package
+    ```bash Node/.env
+    MONGO_URI=mongodb+srv://<user>:<password>@cluster.mongodb.net/amigoInvisible
+    EMAIL_USER=your.email@gmail.com
+    EMAIL_PASS=your_gmail_app_password
+    PORT=3000
     ```
+
+    | Variable | Purpose |
+    |---|---|
+    | `MONGO_URI` | Full MongoDB connection string including database name |
+    | `EMAIL_USER` | The Gmail address Nodemailer will send from |
+    | `EMAIL_PASS` | A Gmail App Password (not your regular Gmail password) |
+    | `PORT` | The port Express will listen on (defaults to `3000`) |
   </Step>
-  <Step title="Configure">
-    Describe any setup or configuration needed before first use.
+
+  <Step title="Start the Backend">
+    Open a terminal, navigate to the `Node/` directory, install dependencies, and start the development server:
 
     ```bash
-    your-cli init
+    cd Node
+    npm install
+    npm run dev
     ```
+
+    `npm run dev` uses `nodemon` so the server restarts automatically on any file change. You should see both of these lines in the console before continuing:
+
+    ```
+    ✅ Conectado a MongoDB
+    Servidor corriendo en el puerto 3000
+    ```
+
+    If you see `❌ Error al conectar a MongoDB`, double-check your `MONGO_URI` value and that your Atlas cluster allows connections from your IP address.
   </Step>
-  <Step title="Run it">
-    Show the first thing a user does to see it working.
+
+  <Step title="Start the Frontend">
+    Open a **new terminal** (keep the backend running), navigate to the `Angular/` directory, install dependencies, and start the dev server:
 
     ```bash
-    your-cli start
+    cd Angular
+    npm install
+    npm start
     ```
+
+    `npm start` runs `ng serve`. Once compilation finishes, open your browser and navigate to:
+
+    ```
+    http://localhost:4200
+    ```
+
+    You should see the group-creation form. The Angular app is pre-configured to call the **production** backend URL in `GrupoService`. To point it at your local backend instead, open `Angular/src/app/servicios/grupo.ts` and change `apiUrl` to `http://localhost:3000/api/sorteos`.
+  </Step>
+
+  <Step title="Create Your First Group">
+    With both servers running, use the form at `http://localhost:4200` to create a test draw:
+
+    1. Enter a **group name** (e.g., "Office Party 2025").
+    2. Optionally set a **budget** and a **gift-delivery date**.
+    3. Add **at least 3 participants**, each with a name and a valid email address. You can add exclusions to any participant by listing the names of people they must not receive.
+    4. Click **Create Group**. The backend generates a UUID `adminToken` and redirects you to `/sorteo/:adminToken`.
+    5. On the admin page, review the participant list, then click **Launch Draw**. The algorithm runs, updates the draw status to `completado`, and immediately sends an individual email to each participant.
+
+    Check the inboxes you used — each participant will receive an HTML email from the configured `EMAIL_USER` address revealing only their own assignment.
   </Step>
 </Steps>
 
 <Tip>
-  Give people a way to get help. This could be a link to a support page, a chat with a customer support agent, or a forum for your product.
-
-  Example: Need help? Reach out to us at [support@yourcompany.com](mailto:support@yourcompany.com).
+  **Setting up a Gmail App Password:** Regular Gmail passwords are rejected by Google's SMTP server when used from third-party apps. To generate an App Password:
+  1. Go to your [Google Account](https://myaccount.google.com) → **Security**.
+  2. Under "How you sign in to Google", enable **2-Step Verification** if it is not already on.
+  3. Search for **App Passwords** in the Security settings search bar.
+  4. Choose "Mail" as the app, select your device type, and click **Generate**.
+  5. Copy the 16-character password into your `Node/.env` as `EMAIL_PASS`.
 </Tip>
+
+<Warning>
+  Your `adminToken` URL (e.g., `http://localhost:4200/sorteo/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`) is the **only** way to access the group management page. There is no account system and no password-recovery flow. Bookmark it immediately after creating a group — if the URL is lost, there is no way to retrieve it.
+</Warning>

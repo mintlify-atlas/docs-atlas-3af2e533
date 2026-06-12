@@ -1,0 +1,85 @@
+{
+  "projectType": "saas",
+  "projectName": "Amigo Invisible",
+  "projectDescription": "A full-stack web application that lets groups organize Secret Santa draws online — participants enter their details, the app randomly assigns gift recipients with exclusion rules, and sends personalized notification emails automatically.",
+  "theme": "almond",
+  "primaryColor": "#dc2626",
+  "lightColor": "#fef2f2",
+  "darkColor": "#7f1d1d",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "architecture"
+            ]
+          },
+          {
+            "group": "Frontend",
+            "pages": [
+              "frontend/overview",
+              "frontend/components",
+              "frontend/routing",
+              "frontend/services"
+            ]
+          },
+          {
+            "group": "Backend",
+            "pages": [
+              "backend/overview",
+              "backend/data-model",
+              "backend/draw-algorithm",
+              "backend/email-notifications"
+            ]
+          },
+          {
+            "group": "Deployment",
+            "pages": [
+              "deployment/environment",
+              "deployment/vercel"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Sorteos API",
+            "pages": [
+              "api/overview",
+              "api/create-group",
+              "api/get-group",
+              "api/launch-draw"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "No-registration Secret Santa group creation",
+    "Participant exclusion rules (prevent specific pairings)",
+    "Randomised draw algorithm with up to 1000 retry attempts",
+    "Automated personalised email notifications via Nodemailer/Gmail SMTP",
+    "Admin token-based group management link",
+    "Angular SPA frontend with real-time form state preservation",
+    "Node.js/Express REST API backed by MongoDB",
+    "One-click deployment to Vercel (frontend + serverless backend)"
+  ],
+  "publicApiSurface": [
+    "POST /api/sorteos — create a new group",
+    "GET /api/sorteos/:adminToken — retrieve group details",
+    "POST /api/sorteos/:adminToken/lanzar — run the draw and send emails",
+    "GrupoService.crearSorteo(datosGrupo) — Angular service method",
+    "GrupoService.getGrupo(adminToken) — Angular service method",
+    "GrupoService.lanzarSorteo(adminToken) — Angular service method",
+    "generarEmparejamientos(participantes) — draw algorithm utility",
+    "enviarCorreosSorteo(parejas, participantes, nombreGrupo) — email utility"
+  ]
+}

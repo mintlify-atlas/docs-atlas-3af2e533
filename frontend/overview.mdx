@@ -1,0 +1,117 @@
+---
+title: "Angular Frontend: Structure and Setup for Amigo Invisible"
+sidebarTitle: "Overview"
+description: "Explore the Angular 22 single-page application that powers Amigo Invisible — its directory layout, dependencies, and local development setup."
+---
+
+The Amigo Invisible frontend is an Angular 22 single-page application (SPA) that provides the complete user interface for organising Secret Santa draws. It covers two main flows: a group-creation form where organisers enter participant names, emails, and optional exclusions, and a review page where the organiser can inspect the final list and trigger the draw. The app communicates with the Node.js backend over HTTP via a single injectable service and requires no user registration.
+
+## Directory Structure
+
+The source tree under `src/app/` is kept intentionally small — two feature components, one service, and the top-level configuration files:
+
+```bash
+Angular/src/app/
+├── componentes/
+│   ├── grupo/
+│   │   ├── grupo.ts          # Grupo component (group creation form)
+│   │   └── grupo.html        # Grupo template
+│   └── sorteo/
+│       ├── sorteo.ts         # Sorteo component (review & launch)
+│       ├── sorteo.html       # Sorteo template
+│       └── sorteo.scss       # Sorteo styles
+├── servicios/
+│   └── grupo.ts              # GrupoService — all HTTP calls
+├── app.routes.ts             # Route definitions
+├── app.config.ts             # ApplicationConfig (providers)
+├── app.ts                    # Root App component
+└── app.html                  # Root template (router outlet)
+```
+
+## Key Dependencies
+
+<CardGroup cols={2}>
+  <Card title="Angular 22" icon="a">
+    Core framework — `@angular/core`, `@angular/common`, `@angular/platform-browser`, and `@angular/compiler` at `^22.0.0`.
+  </Card>
+  <Card title="@angular/forms" icon="list-check">
+    Provides `FormsModule` and `ngModel` for two-way data binding on all form inputs inside the Grupo component.
+  </Card>
+  <Card title="@angular/router" icon="route">
+    Enables client-side navigation between the group-creation page (`/`) and the review page (`/sorteo/:adminToken`).
+  </Card>
+  <Card title="RxJS ~7.8" icon="circle-nodes">
+    Used by `GrupoService` to return `Observable` streams from every `HttpClient` call.
+  </Card>
+  <Card title="Tailwind CSS ^3.4 (dev)" icon="paintbrush">
+    Utility-first CSS framework applied directly in templates. Configured in `tailwind.config.js` to scan all `src/**/*.{html,ts}` files.
+  </Card>
+  <Card title="Vitest ^4.0 (dev)" icon="flask">
+    Test runner invoked by `ng test`. Listed alongside `jsdom` to provide a browser-like environment for unit tests.
+  </Card>
+</CardGroup>
+
+## Development Setup
+
+<CodeGroup>
+
+```bash Install dependencies
+npm install
+```
+
+```bash Start the dev server
+npm start
+# Alias for: ng serve
+# App available at http://localhost:4200
+```
+
+</CodeGroup>
+
+<Steps>
+  <Step title="Clone the repository">
+    Clone the Amigo Invisible repository and navigate to the Angular project directory.
+    ```bash
+    cd AmigoInvisible/Angular
+    ```
+  </Step>
+  <Step title="Install dependencies">
+    Install all npm dependencies declared in `package.json`.
+    ```bash
+    npm install
+    ```
+  </Step>
+  <Step title="Start the development server">
+    Compile the app in watch mode and serve it locally.
+    ```bash
+    npm start
+    ```
+    The Angular CLI will print the local URL (default `http://localhost:4200`) once compilation succeeds.
+  </Step>
+</Steps>
+
+## Build
+
+Run the production build to compile the app into the `dist/` directory:
+
+```bash
+npm run build
+# Alias for: ng build
+# Output written to dist/
+```
+
+The build output is what gets deployed to Vercel. A `vercel.json` at the project root rewrites all incoming paths to `/index.html` so that Angular's client-side router handles navigation.
+
+## Testing
+
+Unit tests are executed with Vitest through the Angular CLI test command:
+
+```bash
+npm test
+# Alias for: ng test
+```
+
+Vitest runs in a `jsdom` environment, so DOM-dependent Angular code can be tested without a real browser.
+
+<Tip>
+  The Angular app targets the production backend at `https://amigo-invisible-node-87yz.vercel.app/api/sorteos` by default — this URL is hard-coded in `GrupoService`. For local development you should change `apiUrl` in `src/app/servicios/grupo.ts` to `http://localhost:3000/api/sorteos` so requests are routed to your locally running Node server instead.
+</Tip>

@@ -1,0 +1,143 @@
+---
+title: "GrupoService: HTTP Client for the Sorteos API"
+sidebarTitle: "Services"
+description: "GrupoService is the Angular injectable that wraps all HTTP calls to the Amigo Invisible REST API — create group, retrieve group data, and launch the draw."
+---
+
+`GrupoService` is the single Angular service responsible for all communication between the frontend and the Node.js backend. It lives at `src/app/servicios/grupo.ts`, is provided at the root level, and is injected by both the `Grupo` and `Sorteo` components. Every method returns a cold `Observable` from Angular's `HttpClient`, so callers must `.subscribe()` to trigger the request.
+
+## Service Source
+
+```typescript
+import { Injectable } from "@angular/core";
+import { HttpClient } from "@angular/common/http";
+import { Observable } from "rxjs";
+
+@Injectable({
+  providedIn: 'root',
+})
+export class GrupoService {
+  private apiUrl = 'https://amigo-invisible-node-87yz.vercel.app/api/sorteos';
+
+  constructor(private http: HttpClient) {}
+
+  crearSorteo(datosGrupo: any): Observable<any> {
+    return this.http.post(this.apiUrl, datosGrupo);
+  }
+
+  getGrupo(adminToken: string): Observable<any> {
+    return this.http.get(`${this.apiUrl}/${adminToken}`);
+  }
+
+  lanzarSorteo(adminToken: string): Observable<any> {
+    return this.http.post(`${this.apiUrl}/${adminToken}/lanzar`, {})
+  }
+}
+```
+
+## Method Reference
+
+<Tabs>
+  <Tab title="crearSorteo">
+    ### `crearSorteo(datosGrupo)`
+
+    POSTs the group payload to `/api/sorteos` to create a new Secret Santa draw on the backend.
+
+    **Parameters**
+
+    | Name | Type | Description |
+    |---|---|---|
+    | `datosGrupo` | `any` | Object containing `nombreGrupo`, `presupuesto`, and `participantes[]`. |
+
+    **Returns** `Observable<{ mensaje: string; adminToken: string; enlaceAdmin: string }>`
+
+    The `adminToken` in the response is used immediately by the `Grupo` component to navigate to `/sorteo/:adminToken`.
+
+    **Example**
+
+    ```typescript
+    this.grupoService.crearSorteo(datosGrupo).subscribe({
+      next: (res) => {
+        this.router.navigate(['/sorteo', res.adminToken]);
+      },
+      error: (error) => {
+        console.error('Error con el servidor: ', error);
+      },
+    });
+    ```
+  </Tab>
+  <Tab title="getGrupo">
+    ### `getGrupo(adminToken)`
+
+    GETs the stored group data from `/api/sorteos/:adminToken`. Called by the `Sorteo` component in `ngOnInit` to populate the review page.
+
+    **Parameters**
+
+    | Name | Type | Description |
+    |---|---|---|
+    | `adminToken` | `string` | The unique admin token returned at group-creation time. |
+
+    **Returns** `Observable<Sorteo>` — the full group document stored in the backend database, including `nombreGrupo`, `presupuesto`, and the `participantes` array.
+
+    **Example**
+
+    ```typescript
+    this.grupoService.getGrupo(this.adminToken).subscribe({
+      next: (datosDelBackend) => {
+        this.grupo.set(datosDelBackend);
+      },
+      error: (err) => {
+        console.error('Error al traer el sorteo:', err);
+        alert('No se ha podido recuperar la información de este sorteo.');
+      }
+    });
+    ```
+  </Tab>
+  <Tab title="lanzarSorteo">
+    ### `lanzarSorteo(adminToken)`
+
+    POSTs to `/api/sorteos/:adminToken/lanzar` with an empty body. The backend runs the draw algorithm, assigns each participant a Secret Santa, and emails everyone their match.
+
+    **Parameters**
+
+    | Name | Type | Description |
+    |---|---|---|
+    | `adminToken` | `string` | The unique admin token identifying the group to draw. |
+
+    **Returns** `Observable<{ mensaje: string }>` — a confirmation message from the backend.
+
+    **Example**
+
+    ```typescript
+    this.grupoService.lanzarSorteo(this.adminToken).subscribe({
+      next: (res) => {
+        alert('¡Éxito! Los correos ya están volando hacia sus bandejas de entrada.');
+        this.enviando.set(false);
+      },
+      error: (err) => {
+        console.error('Error al lanzar el sorteo:', err);
+        alert('Hubo un error al enviar los correos.');
+        this.enviando.set(false);
+      }
+    });
+    ```
+  </Tab>
+</Tabs>
+
+## Changing the API URL
+
+For local development, the `apiUrl` must point to your locally running Node.js server. Open `src/app/servicios/grupo.ts` and update the private property:
+
+```typescript
+// Change this line:
+private apiUrl = 'https://amigo-invisible-node-87yz.vercel.app/api/sorteos';
+
+// To this for local development:
+private apiUrl = 'http://localhost:3000/api/sorteos';
+```
+
+Once you are ready to deploy, revert the URL to the production Vercel endpoint before running `npm run build`.
+
+<Note>
+  `GrupoService` is decorated with `@Injectable({ providedIn: 'root' })`, which means Angular registers it in the root injector and creates exactly one instance for the entire application lifetime. You do not need to add it to any `providers` array in a module or component — it is available everywhere as a true singleton the moment it is first injected.
+</Note>

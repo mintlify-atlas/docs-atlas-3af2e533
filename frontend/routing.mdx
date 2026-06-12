@@ -1,0 +1,107 @@
+---
+title: "Routing in the Amigo Invisible Angular App"
+sidebarTitle: "Routing"
+description: "How Angular Router is configured in Amigo Invisible — the two application routes, navigation guards, and how state is passed between components."
+---
+
+The Amigo Invisible Angular app uses Angular Router with two named routes that map directly to the two standalone components. The router is registered globally in `app.config.ts` via `provideRouter(routes)`, so it is available throughout the entire application without any module declarations.
+
+## Route Table
+
+| Path | Component | Description |
+|---|---|---|
+| `''` | `Grupo` | The group-creation form. This is the default landing page. |
+| `'sorteo/:adminToken'` | `Sorteo` | The review and launch page. `:adminToken` is a dynamic segment injected from the URL. |
+| `'**'` | *(redirect)* | Any unrecognised path is silently redirected back to `''`. |
+
+## Route Configuration
+
+The full route array defined in `src/app/app.routes.ts`:
+
+```typescript
+import { Routes } from '@angular/router';
+import { Grupo } from './componentes/grupo/grupo';
+import { Sorteo } from './componentes/sorteo/sorteo';
+
+export const routes: Routes = [
+  // Default route
+  { path: '', component: Grupo },
+
+  // Sorteo review page
+  { path: 'sorteo/:adminToken', component: Sorteo },
+
+  // Redirect any unknown URL back to home
+  { path: '**', redirectTo: '' }
+];
+```
+
+These routes are registered in `app.config.ts`:
+
+```typescript
+import { ApplicationConfig, provideBrowserGlobalErrorListeners } from '@angular/core';
+import { provideRouter } from '@angular/router';
+import { provideHttpClient } from '@angular/common/http';
+
+import { routes } from './app.routes';
+
+export const appConfig: ApplicationConfig = {
+  providers: [
+    provideBrowserGlobalErrorListeners(),
+    provideRouter(routes),
+    provideHttpClient()
+  ]
+};
+```
+
+The root `App` component simply renders a `<router-outlet>` so the active component fills the whole viewport.
+
+## Navigating to the Sorteo Page
+
+After `crearGrupo()` receives a successful response from the backend, it extracts the `adminToken` from the response body and uses Angular Router's `navigate()` method to move to the Sorteo page:
+
+```typescript
+this.grupoService.crearSorteo(datosGrupo).subscribe({
+  next: (res) => {
+    const token = res.adminToken;
+    this.router.navigate(['/sorteo', token]);
+  },
+  error: (error) => {
+    console.error('Error con el servidor: ', error);
+  },
+});
+```
+
+Angular Router constructs the final URL as `/sorteo/<token>`, which matches the `sorteo/:adminToken` route and renders the `Sorteo` component with the token available in `ActivatedRoute`.
+
+## Passing State Back
+
+When the organiser decides to go back and edit the group, the Sorteo component does not navigate with a simple `router.navigate(['/'])`. Instead it attaches the current group data to the navigation as Router **state**, so the Grupo component can restore the form without making another HTTP request:
+
+```typescript
+// In Sorteo component
+volverAEditar(): void {
+  this.router.navigate(['/'], { state: { datos: this.grupo() } });
+}
+```
+
+The Grupo constructor picks up that state on the very next navigation event:
+
+```typescript
+// In Grupo constructor
+constructor() {
+  const navegacion = this.router.currentNavigation();
+  const estado = navegacion?.extras.state as { datos: any };
+
+  if (estado && estado.datos) {
+    this.nombreGrupo   = estado.datos.nombreGrupo;
+    this.presupuesto   = estado.datos.presupuesto;
+    this.participantes = estado.datos.participantes;
+  }
+}
+```
+
+Router state is only accessible during the navigation that carries it (via `currentNavigation()`), which is why it is read inside the constructor rather than in `ngOnInit`.
+
+<Tip>
+  The deployed Vercel project for the Angular app includes a `vercel.json` configuration that rewrites all incoming request paths to `/index.html`. This is essential for client-side routing: without it, a user who refreshes the browser on `/sorteo/abc123` would receive a 404 from the CDN instead of the Angular app. The rewrite rule ensures every path always loads the SPA shell, and Angular Router then takes over to display the correct component.
+</Tip>

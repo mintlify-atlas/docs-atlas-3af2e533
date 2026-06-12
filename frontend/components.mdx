@@ -1,0 +1,121 @@
+---
+title: "Grupo and Sorteo: Angular Components Reference"
+sidebarTitle: "Components"
+description: "Detailed reference for the two Angular components in Amigo Invisible — Grupo for group creation and Sorteo for reviewing and launching the draw."
+---
+
+Amigo Invisible has exactly two Angular components — `Grupo` and `Sorteo` — both of which are **standalone** (they declare their own `imports` array and do not belong to any `NgModule`). Together they cover the complete organiser journey: filling in the group details and then confirming the participant list before sending draw emails.
+
+---
+
+## Grupo Component
+
+| Property | Value |
+|---|---|
+| **Selector** | `app-crear-sorteo` |
+| **File** | `src/app/componentes/grupo/grupo.ts` |
+| **Template** | `src/app/componentes/grupo/grupo.html` |
+| **Imports** | `FormsModule` |
+
+The Grupo component is the entry point of the application. It presents the main form where an organiser enters the group name, an optional budget, and the list of participants (name, email, and optional per-participant exclusions). The form uses Angular's `FormsModule` for two-way `[(ngModel)]` binding on every input field.
+
+### State
+
+| Property | Type | Initial value | Description |
+|---|---|---|---|
+| `nombreGrupo` | `string` | `''` | Name of the Secret Santa group. |
+| `presupuesto` | `string` | `''` | Optional budget description (free text, e.g. `"20€ - 30€"`). |
+| `participantes` | `Participante[]` | 3 empty entries | The full list of participants. Starts at the minimum of 3 required by the backend. |
+
+Each entry in `participantes` conforms to the following interface, defined locally in `grupo.ts`:
+
+```typescript
+interface Participante {
+  nombre: string;
+  email: string;
+  exclusiones: string[];
+}
+```
+
+`exclusiones` is an array of **names** (strings) that the participant must not be matched with during the draw.
+
+### Methods
+
+| Method | Description |
+|---|---|
+| `agregarParticipante()` | Appends a new empty `Participante` (`{ nombre: '', email: '', exclusiones: [] }`) to the `participantes` array. |
+| `eliminarParticipante(index)` | Removes the participant at the given index. Shows a browser `alert` if only 3 participants remain, since that is the minimum required for the draw algorithm. |
+| `exclusiones(indexParticipante, nombreAExcluir)` | Toggles an exclusion for a participant: adds the name to `exclusiones` if it is not already present, or removes it if it is. |
+| `crearGrupo()` | Validates that `nombreGrupo` is not empty, then calls `GrupoService.crearSorteo()`. On a successful response it reads `res.adminToken` and navigates to `/sorteo/:adminToken`. |
+
+### Exclusion Toggle Logic
+
+The `exclusiones` method uses a simple index-based toggle on the participant's `exclusiones` array:
+
+```typescript
+exclusiones(indexParticipante: number, nombreAExcluir: string): void {
+  const listaExclusiones = this.participantes[indexParticipante].exclusiones;
+  const idx = listaExclusiones.indexOf(nombreAExcluir);
+
+  if (idx > -1) {
+    // Already excluded — remove
+    listaExclusiones.splice(idx, 1);
+  } else {
+    // Not yet excluded — add
+    listaExclusiones.push(nombreAExcluir);
+  }
+}
+```
+
+In the template this is wired to a set of checkboxes rendered for every other participant in the list. The `[checked]` binding reflects the current state; the `(change)` event fires `exclusiones(i, posibleExcluido.nombre)` on each toggle.
+
+### Restoring State on Back-Navigation
+
+When the user navigates back from the Sorteo component, the Grupo constructor reads Angular Router's navigation state to restore the previously entered data:
+
+```typescript
+constructor() {
+  const navegacion = this.router.currentNavigation();
+  const estado = navegacion?.extras.state as { datos: any };
+
+  if (estado && estado.datos) {
+    this.nombreGrupo   = estado.datos.nombreGrupo;
+    this.presupuesto   = estado.datos.presupuesto;
+    this.participantes = estado.datos.participantes;
+  }
+}
+```
+
+This means the organiser can review the participant list on the Sorteo page and return to the form without losing any of their input.
+
+---
+
+## Sorteo Component
+
+| Property | Value |
+|---|---|
+| **Selector** | `app-sorteo` |
+| **File** | `src/app/componentes/sorteo/sorteo.ts` |
+| **Template** | `src/app/componentes/sorteo/sorteo.html` |
+| **Standalone** | `true` |
+
+The Sorteo component is the review and launch page. It is reached after a group is successfully created. The component reads the `adminToken` from the URL, fetches the group data from the backend, and displays the participant list with their emails. Once satisfied, the organiser can trigger the draw, which emails every participant their assigned Secret Santa.
+
+### Signals
+
+| Signal | Type | Description |
+|---|---|---|
+| `grupo` | `signal<any>(null)` | Holds the group data returned by `GrupoService.getGrupo()`. The template uses `@if (!grupo())` to show a loading spinner until the data arrives. |
+| `enviando` | `signal<boolean>(false)` | Set to `true` while the launch request is in flight, disabling both action buttons to prevent double-submission. |
+
+### Methods
+
+| Method | Description |
+|---|---|
+| `ngOnInit()` | Reads `adminToken` from the route snapshot via `ActivatedRoute`, then calls `GrupoService.getGrupo(adminToken)` and stores the result in the `grupo` signal. |
+| `volverAEditar()` | Navigates back to `/` and passes the current group data as Router state (`{ state: { datos: this.grupo() } }`), allowing the Grupo component to pre-populate the form. |
+| `lanzarSorteo()` | Asks the user for confirmation, sets `enviando` to `true`, then calls `GrupoService.lanzarSorteo(adminToken)`. Resets `enviando` to `false` on both success and error. |
+
+<Note>
+  The Sorteo component is declared with `standalone: true` and its `imports` array is intentionally empty — it does not need `FormsModule` or any other module. Its three dependencies (`ActivatedRoute`, `Router`, and `GrupoService`) are all injected via `inject()` and are available through Angular's root injector without any additional configuration.
+</Note>

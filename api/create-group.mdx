@@ -1,0 +1,121 @@
+---
+title: "POST /api/sorteos — Create a Secret Santa Group"
+sidebarTitle: "Create Group"
+description: "POST /api/sorteos — Creates a new Secret Santa group in MongoDB with participant list and exclusion rules. Returns the adminToken for group management."
+---
+
+This endpoint creates a new sorteo (group) document in MongoDB and returns the `adminToken` that acts as the sole credential for managing the group. Save this token immediately — there is no way to recover it after the response is received.
+
+## Request
+
+**Method:** `POST`  
+**URL:** `/api/sorteos`  
+**Headers:** `Content-Type: application/json`
+
+### Body Parameters
+
+<ParamField body="nombreGrupo" type="string" required>
+  Display name for the group (e.g. `"Navidad Familia Pérez"`). Stored with leading and trailing whitespace trimmed.
+</ParamField>
+
+<ParamField body="presupuesto" type="string">
+  A free-text budget description (e.g. `"20€ - 30€"`). Optional — leave blank if no budget guidance is needed.
+</ParamField>
+
+<ParamField body="fechaEntrega" type="string">
+  Planned gift exchange date in ISO 8601 format (e.g. `"2024-12-24"`). Stored as a MongoDB `Date`. Optional.
+</ParamField>
+
+<ParamField body="participantes" type="array" required>
+  Array of participant objects. The draw algorithm requires a minimum of 3 participants, though this minimum is not enforced at creation time — it is only checked when the draw is launched.
+
+  <ParamField body="nombre" type="string" required>
+    Display name for this participant (e.g. `"Ana"`). This value is used by the exclusion rules — it must match exactly the names listed in other participants' `exclusiones` arrays.
+  </ParamField>
+
+  <ParamField body="email" type="string" required>
+    Email address for this participant. Used both as a unique identity key during draw pairing and as the delivery address for the reveal email.
+  </ParamField>
+
+  <ParamField body="exclusiones" type="array of strings">
+    Names of participants that this person must **never** be assigned to gift. Each entry must match the `nombre` field of another participant exactly. Pass an empty array `[]` if no exclusions apply.
+  </ParamField>
+</ParamField>
+
+## Example Request
+
+<CodeGroup>
+
+```bash cURL
+curl -X POST https://amigo-invisible-node-87yz.vercel.app/api/sorteos \
+  -H "Content-Type: application/json" \
+  -d '{
+    "nombreGrupo": "Navidad Familia Pérez",
+    "presupuesto": "20€ - 30€",
+    "participantes": [
+      { "nombre": "Ana",   "email": "ana@example.com",   "exclusiones": [] },
+      { "nombre": "Luis",  "email": "luis@example.com",  "exclusiones": ["Ana"] },
+      { "nombre": "Marta", "email": "marta@example.com", "exclusiones": [] }
+    ]
+  }'
+```
+
+```javascript JavaScript (fetch)
+const response = await fetch(
+  "https://amigo-invisible-node-87yz.vercel.app/api/sorteos",
+  {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      nombreGrupo: "Navidad Familia Pérez",
+      presupuesto: "20€ - 30€",
+      participantes: [
+        { nombre: "Ana",   email: "ana@example.com",   exclusiones: [] },
+        { nombre: "Luis",  email: "luis@example.com",  exclusiones: ["Ana"] },
+        { nombre: "Marta", email: "marta@example.com", exclusiones: [] },
+      ],
+    }),
+  }
+);
+
+const data = await response.json();
+console.log(data.adminToken); // store this securely
+```
+
+</CodeGroup>
+
+## Response
+
+**Status:** `201 Created`
+
+<ResponseField name="mensaje" type="string">
+  Human-readable confirmation message. Value is always `"¡Grupo crado con éxito!"`.
+</ResponseField>
+
+<ResponseField name="adminToken" type="string">
+  A randomly generated UUID (via Node.js `crypto.randomUUID()`) that serves as the group's management credential. All future API calls for this group require this value in the URL path.
+</ResponseField>
+
+<ResponseField name="enlaceAdmin" type="string">
+  Relative path to the admin panel for this group, in the format `/admin/{adminToken}`. Intended for use by the frontend to build the full admin URL.
+</ResponseField>
+
+### Example Response
+
+```json
+{
+  "mensaje": "¡Grupo crado con éxito!",
+  "adminToken": "550e8400-e29b-41d4-a716-446655440000",
+  "enlaceAdmin": "/admin/550e8400-e29b-41d4-a716-446655440000"
+}
+```
+
+## Error Responses
+
+| Status | Scenario | Body |
+|--------|----------|------|
+| `500` | Database write failed or unexpected server error | `{ "error": "Hubo un problema al crear el grupo." }` |
+
+<Warning>
+  The `adminToken` is returned **only once** — at group creation. It is not stored in any recoverable form outside of MongoDB. If the token is lost, there is no retrieval or reset mechanism. Store it securely (for example, in your frontend's local state or a secure server-side session) before discarding the creation response.
+</Warning>

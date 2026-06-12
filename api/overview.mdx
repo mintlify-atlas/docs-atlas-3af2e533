@@ -1,0 +1,68 @@
+---
+title: "Sorteos REST API: All Endpoints at a Glance"
+sidebarTitle: "Overview"
+description: "Complete overview of the three Amigo Invisible REST endpoints — base URL, request format, authentication model, and error response structure."
+---
+
+The Amigo Invisible backend exposes three REST endpoints under `/api/sorteos`. All requests and responses use JSON. These endpoints cover the full lifecycle of a Secret Santa group: creating a group, retrieving its data, and launching the randomised draw that sends reveal emails to every participant.
+
+## Base URL
+
+All endpoints share the same base URL. Swap between production and local development as needed:
+
+```
+Production:  https://amigo-invisible-node-87yz.vercel.app
+Local:       http://localhost:3000
+```
+
+A full request URL is formed by appending the endpoint path to the base URL. For example:
+
+```
+https://amigo-invisible-node-87yz.vercel.app/api/sorteos
+```
+
+## Authentication
+
+There are no API keys, OAuth flows, or session cookies. Authentication is entirely token-based at the URL level: when a group is created, the server generates a random UUID called `adminToken` and returns it in the response. Every subsequent operation on that group requires the `adminToken` to appear in the URL path.
+
+Anyone in possession of the token can retrieve the group's data or trigger the draw. **Treat the `adminToken` as a secret** — it should never be embedded in publicly accessible frontend source code, logged to third-party services, or shared beyond the group administrator.
+
+## Request Format
+
+All request bodies must be valid JSON. Any `POST` request that includes a body **must** set the `Content-Type` header:
+
+```
+Content-Type: application/json
+```
+
+`GET` requests do not require a body or a `Content-Type` header.
+
+## Endpoints Summary
+
+<CardGroup cols={1}>
+  <Card title="POST /api/sorteos" icon="plus" href="/api/create-group">
+    Create a new Secret Santa group. Returns the `adminToken` UUID used for all subsequent management operations.
+  </Card>
+  <Card title="GET /api/sorteos/:adminToken" icon="magnifying-glass" href="/api/get-group">
+    Retrieve the full group document — participants, budget, status, and past draw history — by admin token.
+  </Card>
+  <Card title="POST /api/sorteos/:adminToken/lanzar" icon="bolt" href="/api/launch-draw">
+    Run the Secret Santa algorithm, persist pairings to MongoDB, and immediately send personalised reveal emails to all participants.
+  </Card>
+</CardGroup>
+
+## Error Responses
+
+All error responses follow the same envelope shape: a JSON object with a single `error` key containing a human-readable message.
+
+| Status | Scenario | Body |
+|--------|----------|------|
+| `400` | Algorithm failed due to an unsolvable exclusion conflict | `{ "error": "No se pudo encontrar una combinación válida. Revisa las exclusiones." }` |
+| `404` | Group not found for the supplied `adminToken` | `{ "error": "Sorteo no encontrado." }` |
+| `500` | Unexpected internal server error | `{ "error": "Error interno del servidor" }` |
+
+Individual endpoints may return additional, more specific error messages — see each endpoint's page for the full list.
+
+<Warning>
+  The `POST /api/sorteos/:adminToken/lanzar` endpoint is **irreversible**. The moment it is called, reveal emails are dispatched to every participant and the group's `estado` field is permanently changed to `completado`. There is no undo endpoint.
+</Warning>

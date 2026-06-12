@@ -1,0 +1,115 @@
+---
+title: "Deploy Amigo Invisible to Vercel"
+sidebarTitle: "Vercel"
+description: "Step-by-step guide to deploying the Angular frontend and Node.js backend of Amigo Invisible to Vercel as separate projects, with environment variable configuration."
+---
+
+Amigo Invisible is deployed as two independent Vercel projects — one for the Angular frontend and one for the Node.js backend. The frontend is a static single-page application served from prebuilt HTML, CSS, and JavaScript files. The backend runs as a serverless function, meaning each incoming HTTP request spins up the Express app on demand without maintaining a persistent process.
+
+## How Each Part Deploys
+
+### Backend
+
+The `Node/vercel.json` file tells Vercel to compile `index.js` using the `@vercel/node` builder and to forward every incoming request path to that same entry point. This gives the Express router full control over routing.
+
+```json Node/vercel.json
+{
+  "version": 2,
+  "builds": [
+    { "src": "index.js", "use": "@vercel/node" }
+  ],
+  "routes": [
+    { "src": "/(.*)", "dest": "index.js" }
+  ]
+}
+```
+
+### Frontend
+
+The `Angular/vercel.json` file rewrites all URL paths to `/index.html`. This is the standard pattern for single-page applications — it ensures that navigating directly to any Angular route (e.g. `/grupo/abc123`) returns the app shell rather than a 404 from Vercel's static file server.
+
+```json Angular/vercel.json
+{
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}
+```
+
+## Deploying the Backend
+
+<Steps>
+  <Step title="Create a new Vercel project">
+    Log in to [vercel.com](https://vercel.com) and click **Add New → Project**. Import your GitHub repository (e.g. `AmigoInvisible`). If prompted to authorise Vercel's GitHub integration, do so now.
+  </Step>
+  <Step title="Set the Root Directory to Node">
+    In the project configuration screen, expand **Root Directory** and type `Node`. This tells Vercel to treat the `Node/` folder as the project root so it picks up `index.js`, `package.json`, and `vercel.json` from that directory.
+  </Step>
+  <Step title="Add environment variables">
+    Under **Environment Variables**, add the three required variables before the first deploy:
+
+    | Name | Value |
+    |---|---|
+    | `MONGO_URI` | Your MongoDB Atlas connection string |
+    | `EMAIL_USER` | Your Gmail address |
+    | `EMAIL_PASS` | Your Gmail App Password |
+
+    See the [Environment Variables](/deployment/environment) page for details on how to obtain each value.
+  </Step>
+  <Step title="Deploy and note the URL">
+    Click **Deploy**. Once the build completes, Vercel assigns a production URL such as:
+
+    ```
+    https://amigo-invisible-node-xxxx.vercel.app
+    ```
+
+    Copy this URL — you will need it when configuring the Angular frontend.
+  </Step>
+</Steps>
+
+## Deploying the Frontend
+
+<Steps>
+  <Step title="Create a second Vercel project">
+    From the Vercel dashboard click **Add New → Project** again and import the same repository. Vercel supports multiple projects from a single repo.
+  </Step>
+  <Step title="Set the Root Directory to Angular">
+    Set the **Root Directory** to `Angular`. Vercel will detect an Angular project and configure the framework preset automatically.
+  </Step>
+  <Step title="Configure the build settings">
+    Confirm or manually set the following build settings:
+
+    | Setting | Value |
+    |---|---|
+    | **Build Command** | `npm run build` |
+    | **Output Directory** | `dist/angular/browser` |
+
+    The `dist/angular/browser` path is where the Angular CLI places the compiled static assets when building for production.
+  </Step>
+  <Step title="Update the backend URL in the source code">
+    Before triggering the deploy, open `Angular/src/app/servicios/grupo.ts` and replace the `apiUrl` value with the production URL of your backend project from the previous section. See [Connecting Frontend to Backend](#connecting-frontend-to-backend) for the exact line to change.
+  </Step>
+  <Step title="Deploy">
+    Click **Deploy**. Vercel builds the Angular app and publishes the static output. Your frontend is now live and communicating with the serverless backend.
+  </Step>
+</Steps>
+
+## Connecting Frontend to Backend
+
+The `GrupoService` class in `Angular/src/app/servicios/grupo.ts` contains the backend API URL hardcoded as a private class property:
+
+```typescript Angular/src/app/servicios/grupo.ts
+private apiUrl = 'https://amigo-invisible-node-87yz.vercel.app/api/sorteos';
+```
+
+This value must be updated to match your own backend project's Vercel URL before you build the frontend for production. Every HTTP method in `GrupoService` — creating a sorteo, fetching group data by admin token, and triggering the draw — constructs its request URL from this base property, so an incorrect value will cause all API calls to fail silently.
+
+Simply replace the URL string with the one Vercel assigned to your backend project, save the file, and re-run the Angular build.
+
+<Note>
+  Vercel's free (Hobby) tier is entirely sufficient for personal Secret Santa groups. The serverless backend has no persistent connections to manage, and MongoDB Atlas's free M0 cluster handles the light read/write load with no issue. You will not need to upgrade either service for a typical group of friends or family.
+</Note>
+
+<Warning>
+  **Expect cold starts on the first request.** Because the backend runs as a serverless function, Vercel may deallocate it after a period of inactivity. The first request after a quiet period can take a few seconds while the function container initialises and the Mongoose connection to MongoDB is re-established. Subsequent requests within the same active window respond normally.
+</Warning>

@@ -1,0 +1,124 @@
+---
+title: "How the Secret Santa Draw Algorithm Works"
+sidebarTitle: "Draw Algorithm"
+description: "Amigo Invisible uses a randomized retry algorithm to generate valid Secret Santa pairings that respect self-gifting and exclusion constraints."
+---
+
+The draw algorithm is the core of the Amigo Invisible service. It is implemented in `Node/utils/algoritmoSorteo.js` and exposed as the `generarEmparejamientos` function. The `lanzarSorteo` controller calls it after verifying that the group exists and has enough participants. The algorithm's approach is straightforward: randomly shuffle the participant list, validate every resulting pair against two rules, and retry up to 1,000 times until a fully valid assignment is found.
+
+## How It Works
+
+<Steps>
+  <Step title="Shuffle the participants array">
+    The helper function `mezclarArray` creates a copy of the participants array and applies a **Fisher-Yates shuffle** — iterating from the last element backwards and swapping each element with a randomly chosen element at or before its position. The original `participantes` array is never mutated.
+  </Step>
+  <Step title="Assign givers to receivers by index">
+    After shuffling, the algorithm pairs participants positionally: the participant at index `i` in the **original** array is the giver, and the participant at index `i` in the **shuffled** array is the receiver. Because both arrays have the same length, every participant is both a giver and a receiver exactly once.
+  </Step>
+  <Step title="Validate each pair against two rules">
+    For every `(giver, receiver)` pair the algorithm checks:
+    - **Rule 1 — No self-gifting:** `giver.email !== receiver.email`
+    - **Rule 2 — Respect exclusions:** `receiver.nombre` must not appear in `giver.exclusiones`
+
+    If either check fails, the entire shuffle is immediately discarded (the inner loop `break`s early).
+  </Step>
+  <Step title="Retry on failure">
+    When a shuffle produces at least one invalid pair, the outer `for` loop increments the attempt counter and calls `mezclarArray` again to generate a fresh shuffle. No partial results are kept between attempts.
+  </Step>
+  <Step title="Return valid pairings">
+    If all `participantes.length` pairs pass both rules, the algorithm returns an array of `{ de: email, para: email }` objects — one entry per giver-receiver pair. This array is then saved to the database and passed to the mailer.
+  </Step>
+  <Step title="Throw after 1,000 failed attempts">
+    If the outer loop exhausts all 1,000 attempts without finding a valid complete assignment, the function throws:
+    ```
+    Error: 'No se pudo encontrar una combinación válida. Revisa las exclusiones.'
+    ```
+    The `lanzarSorteo` controller catches this error and returns it to the client as a `400` response.
+  </Step>
+</Steps>
+
+## Full Source
+
+```javascript
+// Función para barajar un array
+const mezclarArray = (array) => {
+    const mezclado = [...array];
+    for(let i = mezclado.length -1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [mezclado[i], mezclado[j]] = [mezclado[j], mezclado[i]];
+    }
+
+    return mezclado;
+}
+
+exports.generarEmparejamientos = (participantes) => {
+    const MAX_INTENTOS = 1000;
+
+    for (let intento = 0; intento < MAX_INTENTOS; intento++){
+        // Cramos una lista de receptores barajada
+        const receptores = mezclarArray(participantes);
+        let esValido = true;
+        const parejas = [];
+
+        // Comprobamos la lista generada
+        for (let i = 0; i < participantes.length; i++) {
+            const de = participantes[i];
+            const para = receptores[i];
+
+            // Regla 1 : No me puedo regalar a mi mismo
+            const esMismoUsuario = de.email === para.email;
+
+            // Regla 2 : El receptor no puede estar en mis excluidos
+            const estaExcluido = de.exclusiones.includes(para.nombre);
+
+            if( esMismoUsuario || estaExcluido ){
+                esValido = false;
+                break; // La combinación no vale, se rompe el bucle de comrobación
+            }
+
+            // Si pasa los filtros, añadimos la pareja
+            parejas.push({ de: de.email, para: para.email });
+        }
+
+        // Si todo el array es valido, se devuelve el resultado
+        if (esValido){
+            return parejas;
+        }
+    }
+
+    // Si después de 1000 intentos no encuentra combinación es practicamente imposible. Se lanza un error
+    throw new Error('No se pudo encontrar una combinación válida. Revisa las exclusiones.');
+};
+```
+
+## Constraints
+
+The following rules govern what constitutes a valid draw. Some are enforced inside `generarEmparejamientos` itself; others are enforced by the controller before the utility is called.
+
+| Constraint | Enforced by |
+|---|---|
+| Minimum 3 participants required | `lanzarSorteo` controller (returns `404` if fewer than 3) |
+| Self-gifting is always forbidden | `algoritmoSorteo.js` — Rule 1 |
+| Exclusions are one-directional | `algoritmoSorteo.js` — Rule 2 |
+
+**Exclusions are one-directional.** If Alice adds Bob to her `exclusiones` list, Alice will never be assigned Bob as her recipient. However, Bob may still draw Alice's name — exclusions only constrain the giver, not the receiver.
+
+## Error Handling
+
+If the algorithm cannot find a valid complete assignment within 1,000 attempts, it throws:
+
+```
+Error: No se pudo encontrar una combinación válida. Revisa las exclusiones.
+```
+
+The `lanzarSorteo` controller catches this with a `try/catch` block and forwards `error.message` to the client as a `400 Bad Request` response:
+
+```javascript
+res.status(400).json({ error: error.message || 'Error interno en el servidor' });
+```
+
+This error will realistically only occur when the exclusion constraints make it **mathematically impossible** to form a valid permutation — for example, in a group of three where every participant has excluded both other participants.
+
+<Tip>
+  Overly restrictive exclusion configurations — such as everyone excluding everyone else — will always exhaust all 1,000 attempts and return an error. Keep exclusion lists as minimal as possible. For a group of N participants, the probability of a random shuffle satisfying all constraints drops sharply as the number of exclusions per person increases.
+</Tip>

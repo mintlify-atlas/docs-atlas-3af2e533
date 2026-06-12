@@ -1,0 +1,102 @@
+---
+title: "Automated Email Notifications via Nodemailer"
+sidebarTitle: "Email Notifications"
+description: "How Amigo Invisible sends personalized Secret Santa reveal emails using Nodemailer and Gmail SMTP — configuration, email format, and troubleshooting tips."
+---
+
+Once the draw algorithm successfully produces a valid set of pairings, the `lanzarSorteo` controller immediately calls `enviarCorreosSorteo`, defined in `Node/utils/mailer.js`. This function sends one personalized HTML email to each giver in the group, revealing only the name of their assigned recipient — no participant ever learns who is giving a gift to them, and the organizer never sees the individual assignments since every email is dispatched directly from the server.
+
+## Configuration
+
+The Nodemailer transporter is created once at module load time using **Gmail SMTP on port 465 with SSL**. Credentials are read exclusively from environment variables — no secrets are hard-coded in the source.
+
+```javascript
+const transporter = nodemailer.createTransport({
+  host: 'smtp.gmail.com',
+  port: 465,
+  secure: true,
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS
+  },
+  localAddress: '0.0.0.0',
+  tls: {
+    rejectUnauthorized: false
+  }
+});
+```
+
+| Variable | Description |
+|---|---|
+| `EMAIL_USER` | The Gmail address used as both the sender and the SMTP username (e.g. `amigoregalos@gmail.com`). |
+| `EMAIL_PASS` | A Gmail **App Password** (not your regular account password). See [Gmail App Password Setup](#gmail-app-password-setup) below. |
+
+Setting `localAddress` to `0.0.0.0` ensures the SMTP connection binds correctly in containerized and serverless environments. `tls.rejectUnauthorized: false` relaxes certificate validation, which is necessary in some restricted runtime environments.
+
+## Email Format
+
+Each participant who is a giver receives exactly one email with the following structure:
+
+- **From:** `"Amigo Invisible - {nombreGrupo}" <EMAIL_USER>`
+- **To:** The giver's email address
+- **Subject:** `🤫 ¡Tu Amigo Invisible de {nombreGrupo} ha sido revelado!`
+- **Body:** An HTML message that greets the giver by their `nombre`, names the group, and displays only the recipient's `nombre` inside a visually distinct highlighted box — styled with a red heading and a green dashed border.
+
+The full `mailOptions` HTML template from source:
+
+```javascript
+const mailOptions = {
+  from: `"Amigo Invisible - ${nombreGrupo}" <${process.env.EMAIL_USER}>`,
+  to: remitente.email, // Se lo enviamos al que tiene que comprar el regalo
+  subject: `🤫 ¡Tu Amigo Invisible de ${nombreGrupo} ha sido revelado!`,
+  html: `
+    <div style="font-family: Arial, sans-serif; padding: 20px; text-align: center; background-color: #f9f9f9; border-radius: 10px;">
+      <h2 style="color: #d9534f;">¡Hola ${remitente.nombre}! 🎄</h2>
+      <p style="font-size: 16px;">El sorteo del grupo <strong>"${nombreGrupo}"</strong> se ha realizado.</p>
+      <p style="font-size: 18px;">Este año te toca hacerle un regalo a:</p>
+      <h1 style="color: #5cb85c; border: 2px dashed #5cb85c; display: inline-block; padding: 10px 20px; border-radius: 5px;">
+        🎁 ${destinatario.nombre}
+      </h1>
+      <p style="font-size: 14px; margin-top: 20px; color: #777;">¡Mantén el secreto y que disfrutes buscando el regalo perfecto!</p>
+    </div>
+  `
+};
+```
+
+Before constructing `mailOptions`, the function resolves both the giver and recipient objects from the `participantes` array by matching each pair's email address:
+
+```javascript
+const remitente = participantes.find(p => p.email === pareja.de);
+const destinatario = participantes.find(p => p.email === pareja.para);
+```
+
+This lookup is what allows the email to address the giver by name and display the recipient's name — the draw algorithm stores only email addresses in the pairings array.
+
+## Privacy
+
+Each email is addressed individually to the giver and contains **only** the name of the person they must buy a gift for. Recipients are never CC'd or BCC'd. The organizer who triggered the draw receives no summary email listing all assignments. Because the emails are sent server-side after the draw, even the organizer's browser session never receives the complete pairing data in a way that could be accidentally exposed.
+
+## Gmail App Password Setup
+
+<Steps>
+  <Step title="Open your Google Account Security settings">
+    Go to [myaccount.google.com/security](https://myaccount.google.com/security) and sign in with the Gmail account you want to use as the sender.
+  </Step>
+  <Step title="Enable 2-Step Verification">
+    Under **How you sign in to Google**, click **2-Step Verification** and follow the prompts to enable it. App Passwords are only available on accounts with 2-Step Verification active.
+  </Step>
+  <Step title="Open the App Passwords page">
+    Once 2-Step Verification is enabled, return to the Security page. Under **How you sign in to Google**, select **App Passwords** (you may need to search for it in the settings search bar).
+  </Step>
+  <Step title="Generate an App Password and add it to your environment">
+    Choose **Mail** as the app type and your device, then click **Generate**. Copy the 16-character password shown and set it as `EMAIL_PASS` in your `.env` file. You will not be able to view the password again after closing the dialog.
+  </Step>
+</Steps>
+
+<Warning>
+  Regular Gmail account passwords will **not** work for SMTP authentication. Google blocks sign-in attempts from third-party apps using account passwords. You must use a dedicated **App Password** generated through the steps above, or the transporter will receive an authentication error and no emails will be sent.
+</Warning>
+
+<Note>
+  Emails are dispatched sequentially inside a `for...of` loop with `await transporter.sendMail(mailOptions)` on each iteration. This means the server waits for each email to be accepted by Gmail's SMTP server before moving on to the next one. For large groups this may add several seconds to the total response time of the `POST /:adminToken/lanzar` endpoint. The `lanzarSorteo` controller `await`s the entire `enviarCorreosSorteo` call, so the HTTP response is only returned to the client once all emails have been successfully handed off to Gmail.
+</Note>
