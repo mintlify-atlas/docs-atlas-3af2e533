@@ -4,7 +4,7 @@ sidebarTitle: "Data Model"
 description: "Complete reference for the Sorteo Mongoose schema — all fields, types, validation rules, and embedded document structures for participants and pairings."
 ---
 
-Amigo Invisible stores all group and draw data in a single MongoDB collection using the `Sorteo` Mongoose model defined in `Node/modelos/Sorteo.js`. One `Sorteo` document represents one Secret Santa group — it holds the group metadata, the full list of participants, and the historical record of past draw results.
+Amigo Invisible stores all group and draw data in a single MongoDB collection using the `Sorteo` Mongoose model defined in `Node/modelos/Sorteo.js`. One `Sorteo` document represents one Secret Santa group — it holds the group metadata, the full list of participants, and the schema fields for tracking draw state and history.
 
 ## Schema Source
 
@@ -69,7 +69,7 @@ The schema also enables Mongoose's `timestamps` option, which automatically adds
 </ParamField>
 
 <ParamField body="emparejamientosPasados" type="Array">
-  An array of embedded past-draw sub-documents that records the results of each draw run. See the [Past Pairings Sub-document](#past-pairings-sub-document) section below.
+  An array of embedded past-draw sub-documents intended to store the results of each draw run for history tracking. The schema defines its structure (see [Past Pairings Sub-document](#past-pairings-sub-document) below), though the current controller writes the generated pairings to `sorteo.emparejamientosActuales` rather than pushing into this array.
 </ParamField>
 
 ## Participant Sub-document
@@ -90,7 +90,7 @@ Each entry in the `participantes` array represents one person in the group.
 
 ## Past Pairings Sub-document
 
-Each entry in the `emparejamientosPasados` array captures the full result of one draw run.
+The `emparejamientosPasados` array is defined in the schema to capture the full result of each draw run. Each entry in the array has the following structure:
 
 <ParamField body="fechaSorteo" type="Date">
   The timestamp when the draw was run. Defaults to `Date.now` at the time the sub-document is created.
@@ -108,5 +108,5 @@ A `Sorteo` document moves through two states:
 - **`completado`** — The draw has been executed successfully and all reveal emails have been sent. The `lanzarSorteo` controller sets `estado = 'completado'` and saves the document after the algorithm produces valid pairings and before the emails are dispatched.
 
 <Warning>
-  Once a group's `estado` is `completado`, there is no built-in API endpoint to reset the status or re-run the draw. The current implementation is intentionally one-shot — calling `POST /:adminToken/lanzar` again on a completed group will overwrite `emparejamientosActuales` and re-send emails. There is no guard against this, so organizers should treat the draw action as final.
+  Once a group's `estado` is `completado`, there is no built-in API endpoint to reset the status or re-run the draw. The current implementation is intentionally one-shot — calling `POST /:adminToken/lanzar` again on a completed group will re-run the algorithm and re-send emails. There is no guard against this, so organizers should treat the draw action as final.
 </Warning>

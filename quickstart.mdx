@@ -1,5 +1,5 @@
 ---
-title: "Get Started with Amigo Invisible in Minutes"
+title: "Set Up Amigo Invisible Locally and Run Your First Draw"
 sidebarTitle: "Quickstart"
 description: "Clone the repository, configure environment variables, and run both the Angular frontend and Node.js backend locally to host your first Secret Santa draw."
 ---
@@ -57,7 +57,7 @@ cd AmigoInvisible
 
     `npm run dev` uses `nodemon` so the server restarts automatically on any file change. You should see both of these lines in the console before continuing:
 
-    ```
+    ```text
     ✅ Conectado a MongoDB
     Servidor corriendo en el puerto 3000
     ```
@@ -76,7 +76,7 @@ cd AmigoInvisible
 
     `npm start` runs `ng serve`. Once compilation finishes, open your browser and navigate to:
 
-    ```
+    ```text
     http://localhost:4200
     ```
 
@@ -87,8 +87,8 @@ cd AmigoInvisible
     With both servers running, use the form at `http://localhost:4200` to create a test draw:
 
     1. Enter a **group name** (e.g., "Office Party 2025").
-    2. Optionally set a **budget** and a **gift-delivery date**.
-    3. Add **at least 3 participants**, each with a name and a valid email address. You can add exclusions to any participant by listing the names of people they must not receive.
+    2. Optionally set a **budget**.
+    3. Add **at least 3 participants**, each with a name and a valid email address. You can add exclusions to any participant by listing the names of people they must not give a gift to.
     4. Click **Create Group**. The backend generates a UUID `adminToken` and redirects you to `/sorteo/:adminToken`.
     5. On the admin page, review the participant list, then click **Launch Draw**. The algorithm runs, updates the draw status to `completado`, and immediately sends an individual email to each participant.
 

@@ -30,8 +30,8 @@ The draw algorithm is the core of the Amigo Invisible service. It is implemented
   </Step>
   <Step title="Throw after 1,000 failed attempts">
     If the outer loop exhausts all 1,000 attempts without finding a valid complete assignment, the function throws:
-    ```
-    Error: 'No se pudo encontrar una combinación válida. Revisa las exclusiones.'
+    ```text
+    Error: No se pudo encontrar una combinación válida. Revisa las exclusiones.
     ```
     The `lanzarSorteo` controller catches this error and returns it to the client as a `400` response.
   </Step>
@@ -107,7 +107,7 @@ The following rules govern what constitutes a valid draw. Some are enforced insi
 
 If the algorithm cannot find a valid complete assignment within 1,000 attempts, it throws:
 
-```
+```text
 Error: No se pudo encontrar una combinación válida. Revisa las exclusiones.
 ```
 

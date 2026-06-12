@@ -1,7 +1,7 @@
 ---
 title: "POST /api/sorteos/:adminToken/lanzar — Run the Draw"
 sidebarTitle: "Launch Draw"
-description: "POST /api/sorteos/:adminToken/lanzar — Runs the Secret Santa algorithm, saves pairings to MongoDB, and sends personalized reveal emails to all participants."
+description: "POST /api/sorteos/:adminToken/lanzar — Runs the Secret Santa algorithm, saves pairings to MongoDB, and sends personalised reveal emails to participants."
 ---
 
 This is the most consequential endpoint in the API. Calling it triggers the randomised Secret Santa algorithm, persists the resulting pairings to MongoDB, and immediately dispatches personalised HTML reveal emails to every participant. Because emails are sent the moment this endpoint is called, the operation cannot be undone.

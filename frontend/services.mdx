@@ -1,7 +1,7 @@
 ---
-title: "GrupoService: HTTP Client for the Sorteos API"
+title: "GrupoService: HTTP Client for the Amigo Invisible Backend"
 sidebarTitle: "Services"
-description: "GrupoService is the Angular injectable that wraps all HTTP calls to the Amigo Invisible REST API — create group, retrieve group data, and launch the draw."
+description: "GrupoService is the Angular injectable that wraps all HTTP calls to the Amigo Invisible REST API — create a group, retrieve data, and launch the draw."
 ---
 
 `GrupoService` is the single Angular service responsible for all communication between the frontend and the Node.js backend. It lives at `src/app/servicios/grupo.ts`, is provided at the root level, and is injected by both the `Grupo` and `Sorteo` components. Every method returns a cold `Observable` from Angular's `HttpClient`, so callers must `.subscribe()` to trigger the request.

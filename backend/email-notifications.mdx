@@ -1,7 +1,7 @@
 ---
 title: "Automated Email Notifications via Nodemailer"
 sidebarTitle: "Email Notifications"
-description: "How Amigo Invisible sends personalized Secret Santa reveal emails using Nodemailer and Gmail SMTP — configuration, email format, and troubleshooting tips."
+description: "How Amigo Invisible sends personalized Secret Santa reveal emails via Nodemailer and Gmail SMTP — transporter config, email template, and setup steps."
 ---
 
 Once the draw algorithm successfully produces a valid set of pairings, the `lanzarSorteo` controller immediately calls `enviarCorreosSorteo`, defined in `Node/utils/mailer.js`. This function sends one personalized HTML email to each giver in the group, revealing only the name of their assigned recipient — no participant ever learns who is giving a gift to them, and the organizer never sees the individual assignments since every email is dispatched directly from the server.

@@ -1,7 +1,7 @@
 ---
-title: "Deploy Amigo Invisible to Vercel"
+title: "Deploy Amigo Invisible Frontend and Backend to Vercel"
 sidebarTitle: "Vercel"
-description: "Step-by-step guide to deploying the Angular frontend and Node.js backend of Amigo Invisible to Vercel as separate projects, with environment variable configuration."
+description: "Set up two Vercel projects for Amigo Invisible — one for the Angular SPA and one for the Node.js backend — with build and environment configuration."
 ---
 
 Amigo Invisible is deployed as two independent Vercel projects — one for the Angular frontend and one for the Node.js backend. The frontend is a static single-page application served from prebuilt HTML, CSS, and JavaScript files. The backend runs as a serverless function, meaning each incoming HTTP request spins up the Express app on demand without maintaining a persistent process.
@@ -53,8 +53,9 @@ The `Angular/vercel.json` file rewrites all URL paths to `/index.html`. This is 
     | `MONGO_URI` | Your MongoDB Atlas connection string |
     | `EMAIL_USER` | Your Gmail address |
     | `EMAIL_PASS` | Your Gmail App Password |
+    | `NODE_ENV` | `production` |
 
-    See the [Environment Variables](/deployment/environment) page for details on how to obtain each value.
+    Setting `NODE_ENV=production` tells the Express app to skip `app.listen()` so the module exports cleanly as a serverless function handler. See the [Environment Variables](/deployment/environment) page for details on how to obtain each value.
   </Step>
   <Step title="Deploy and note the URL">
     Click **Deploy**. Once the build completes, Vercel assigns a production URL such as:
@@ -82,9 +83,9 @@ The `Angular/vercel.json` file rewrites all URL paths to `/index.html`. This is 
     | Setting | Value |
     |---|---|
     | **Build Command** | `npm run build` |
-    | **Output Directory** | `dist/angular/browser` |
+    | **Output Directory** | `dist/Angular/browser` |
 
-    The `dist/angular/browser` path is where the Angular CLI places the compiled static assets when building for production.
+    The `dist/Angular/browser` path is where the Angular CLI places the compiled static assets when building for production. The project name defined in `angular.json` is `Angular` (capital A), which determines this directory name.
   </Step>
   <Step title="Update the backend URL in the source code">
     Before triggering the deploy, open `Angular/src/app/servicios/grupo.ts` and replace the `apiUrl` value with the production URL of your backend project from the previous section. See [Connecting Frontend to Backend](#connecting-frontend-to-backend) for the exact line to change.

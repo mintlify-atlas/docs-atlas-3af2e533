@@ -1,5 +1,5 @@
 ---
-title: "Amigo Invisible Architecture: Frontend, Backend, and Data Flow"
+title: "Amigo Invisible Architecture: Angular, Node.js, MongoDB"
 sidebarTitle: "Architecture"
 description: "How Amigo Invisible's Angular SPA, Node.js REST API, MongoDB database, and Gmail SMTP fit together to run a Secret Santa draw end to end."
 ---
@@ -10,7 +10,7 @@ Amigo Invisible is a two-tier application: an Angular single-page application ha
 
 The following sequence describes a complete Secret Santa draw, from the organizer opening the app to participants receiving their emails:
 
-1. **The organizer fills out the group form** in the Angular `Grupo` component — group name, optional budget, optional delivery date, and the participant list with any exclusions.
+1. **The organizer fills out the group form** in the Angular `Grupo` component — group name, optional budget, and the participant list with any exclusions.
 2. **Angular's `GrupoService` sends a `POST /api/sorteos` request** to the Node.js backend, with the full group payload as a JSON body.
 3. **The backend creates the sorteo document** in MongoDB — generating a UUID `adminToken` via `crypto.randomUUID()` — and responds with `201 Created`, returning the `adminToken` to the Angular client.
 4. **The Angular app navigates to `/sorteo/:adminToken`**, where the `Sorteo` component calls `GET /api/sorteos/:adminToken` to fetch and display the group details and current draw state (`borrador`).
@@ -76,7 +76,7 @@ In production the server is exported as a module (`module.exports = app`) and wr
 
 MongoDB stores a single collection: `sorteos`. Every document is an instance of the `Sorteo` Mongoose schema, which captures the complete state of one group:
 
-```
+```text
 Sorteo {
   nombreGrupo       String          // Group display name
   presupuesto       String          // Optional gift budget

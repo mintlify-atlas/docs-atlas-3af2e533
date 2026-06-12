@@ -1,5 +1,5 @@
 ---
-title: "Environment Variables for Amigo Invisible"
+title: "Configure Environment Variables for Amigo Invisible"
 sidebarTitle: "Environment"
 description: "All environment variables required by the Amigo Invisible Node.js backend — MongoDB connection, Gmail SMTP credentials, and server port configuration."
 ---
@@ -62,6 +62,8 @@ MONGO_URI=mongodb+srv://<user>:<password>@cluster.mongodb.net/amigoInvisible
 EMAIL_USER=your.email@gmail.com
 EMAIL_PASS=your_gmail_app_password
 PORT=3000
+# NODE_ENV is intentionally omitted locally so app.listen() runs normally.
+# Set NODE_ENV=production only in your Vercel project environment variables.
 ```
 
 <Warning>
